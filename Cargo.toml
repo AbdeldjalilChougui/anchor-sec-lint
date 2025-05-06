@@ -1,0 +1,31 @@
+[package]
+name = "anchor-sec-lint"
+version = "0.1.0"
+edition = "2021"
+description = "Heuristic static security checks for Anchor (Solana) programs, with SARIF output"
+license = "MIT"
+authors = ["Abdeldjalil Chougui"]
+repository = "https://github.com/AbdeldjalilChougui/anchor-sec-lint"
+homepage = "https://github.com/AbdeldjalilChougui/anchor-sec-lint"
+readme = "README.md"
+keywords = ["solana", "anchor", "security", "lint", "sarif"]
+categories = ["command-line-utilities", "development-tools", "cryptography::cryptocurrencies"]
+include = ["src/**/*", "Cargo.toml", "Cargo.lock", "README.md", "LICENSE", "CITATION.cff"]
+
+[dependencies]
+syn = { version = "2", features = ["full", "visit", "extra-traits", "parsing"] }
+proc-macro2 = { version = "1", features = ["span-locations"] }
+quote = "1"
+clap = { version = "4", features = ["derive"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+walkdir = "2"
+anyhow = "1"
+
+[dev-dependencies]
+assert_cmd = "2"
+
+# The profile that 'dist' will build with
+[profile.dist]
+inherits = "release"
+lto = "thin"
