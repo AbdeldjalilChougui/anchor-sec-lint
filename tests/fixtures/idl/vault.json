@@ -1,0 +1,27 @@
+{
+  "address": "Vu1nerab1e1111111111111111111111111111111111",
+  "metadata": { "name": "vault", "version": "0.1.0", "spec": "0.1.0" },
+  "instructions": [
+    {
+      "name": "set_fee",
+      "discriminator": [18, 154, 24, 18, 237, 214, 19, 80],
+      "accounts": [
+        { "name": "admin" },
+        { "name": "config", "writable": true }
+      ],
+      "args": [{ "name": "fee", "type": "u64" }]
+    },
+    {
+      "name": "deposit",
+      "discriminator": [242, 35, 198, 137, 82, 225, 242, 182],
+      "accounts": [
+        { "name": "payer", "writable": true, "signer": true },
+        { "name": "vault", "writable": true, "pda": { "seeds": [{ "kind": "const", "value": [118, 97, 117, 108, 116] }] } },
+        { "name": "system_program", "address": "11111111111111111111111111111111" }
+      ],
+      "args": [{ "name": "amount", "type": "u64" }]
+    }
+  ],
+  "accounts": [],
+  "types": []
+}
