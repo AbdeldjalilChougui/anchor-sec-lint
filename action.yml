@@ -1,0 +1,136 @@
+name: "Anchor Security Lint"
+description: "Heuristic static security checks for Anchor (Solana) programs, with SARIF output for GitHub code scanning."
+author: "Abdeldjalil Chougui"
+branding:
+  icon: "shield"
+  color: "purple"
+
+inputs:
+  path:
+    description: "Space-separated Rust source files/directories and/or Anchor IDL .json files to scan."
+    required: false
+    default: "programs"
+  format:
+    description: "Report format: text, json or sarif."
+    required: false
+    default: "text"
+  output:
+    description: "Write the report to this file instead of the job log (e.g. anchor-sec-lint.sarif)."
+    required: false
+    default: ""
+  fail-on:
+    description: "Fail the step when a finding at or above this level exists: error (default), warning, note or never."
+    required: false
+    default: "error"
+  base:
+    description: "Path prefix stripped from SARIF file URIs so they are repo-relative. Default: the workspace root."
+    required: false
+    default: ""
+  args:
+    description: "Extra arguments passed to anchor-sec-lint as-is."
+    required: false
+    default: ""
+  version:
+    description: "anchor-sec-lint release to use, e.g. 0.1.0 or latest. Default: the tag this action is used at (vX.Y.Z), else latest."
+    required: false
+    default: ""
+
+outputs:
+  report:
+    description: "Path of the report file when `output` is set (pass it to github/codeql-action/upload-sarif)."
+    value: ${{ steps.run.outputs.report }}
+  exit-code:
+    description: "anchor-sec-lint exit code (0 clean, 1 findings at the fail-on level, 2 usage/IO error)."
+    value: ${{ steps.run.outputs.exit-code }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Install anchor-sec-lint
+      shell: bash
+      env:
+        TOOL: anchor-sec-lint
+        REPO: AbdeldjalilChougui/anchor-sec-lint
+        INPUT_VERSION: ${{ inputs.version }}
+        ACTION_REF: ${{ github.action_ref }}
+        RUNNER_OS_NAME: ${{ runner.os }}
+        RUNNER_ARCH_NAME: ${{ runner.arch }}
+      run: |
+        set -euo pipefail
+        case "$RUNNER_OS_NAME/$RUNNER_ARCH_NAME" in
+          Linux/X64)   target=x86_64-unknown-linux-gnu;   ext=tar.xz ;;
+          Linux/ARM64) target=aarch64-unknown-linux-gnu;  ext=tar.xz ;;
+          macOS/X64)   target=x86_64-apple-darwin;        ext=tar.xz ;;
+          macOS/ARM64) target=aarch64-apple-darwin;       ext=tar.xz ;;
+          Windows/X64) target=x86_64-pc-windows-msvc;     ext=zip ;;
+          *) echo "::error::$TOOL has no prebuilt binary for $RUNNER_OS_NAME/$RUNNER_ARCH_NAME"; exit 1 ;;
+        esac
+        version="${INPUT_VERSION#v}"
+        if [ -z "$version" ]; then
+          case "$ACTION_REF" in v[0-9]*) version="${ACTION_REF#v}" ;; *) version=latest ;; esac
+        fi
+        if [ "$version" = latest ]; then
+          base="https://github.com/$REPO/releases/latest/download"
+        else
+          base="https://github.com/$REPO/releases/download/v$version"
+        fi
+        archive="$TOOL-$target.$ext"
+        tmp="$RUNNER_TEMP"
+        if command -v cygpath >/dev/null 2>&1; then tmp=$(cygpath -u "$tmp"); fi
+        dir="$tmp/$TOOL-$target"
+        mkdir -p "$dir"
+        cd "$dir"
+        echo "Downloading $base/$archive"
+        curl --proto '=https' --tlsv1.2 -fsSL --retry 3 -o "$archive" "$base/$archive"
+        curl --proto '=https' --tlsv1.2 -fsSL --retry 3 -o "$archive.sha256" "$base/$archive.sha256"
+        expected=$(cut -d ' ' -f 1 < "$archive.sha256" | tr -d '\r\n')
+        if command -v sha256sum >/dev/null 2>&1; then
+          actual=$(sha256sum "$archive" | cut -d ' ' -f 1)
+        else
+          actual=$(shasum -a 256 "$archive" | cut -d ' ' -f 1)
+        fi
+        if [ "$expected" != "$actual" ]; then
+          echo "::error::checksum mismatch for $archive"
+          exit 1
+        fi
+        if [ "$ext" = zip ]; then unzip -oq "$archive"; else tar -xJf "$archive"; fi
+        bin=$(find "$dir" -type f \( -name "$TOOL" -o -name "$TOOL.exe" \) | head -n 1)
+        if [ -z "$bin" ]; then
+          echo "::error::$TOOL binary not found in $archive"
+          exit 1
+        fi
+        chmod +x "$bin"
+        bindir=$(dirname "$bin")
+        if command -v cygpath >/dev/null 2>&1; then bindir=$(cygpath -w "$bindir"); fi
+        echo "$bindir" >> "$GITHUB_PATH"
+        "$bin" --version
+
+    - name: Run anchor-sec-lint
+      id: run
+      shell: bash
+      env:
+        INPUT_PATH: ${{ inputs.path }}
+        INPUT_FORMAT: ${{ inputs.format }}
+        INPUT_OUTPUT: ${{ inputs.output }}
+        INPUT_FAIL_ON: ${{ inputs.fail-on }}
+        INPUT_BASE: ${{ inputs.base }}
+        INPUT_ARGS: ${{ inputs.args }}
+        WORKSPACE: ${{ github.workspace }}
+      run: |
+        set -uo pipefail
+        read -r -a paths <<< "$INPUT_PATH"
+        base="${INPUT_BASE:-$WORKSPACE}"
+        cmd=(anchor-sec-lint "${paths[@]}" --format "$INPUT_FORMAT" --fail-on "$INPUT_FAIL_ON" --base "$base")
+        if [ -n "$INPUT_OUTPUT" ]; then
+          cmd+=(--output "$INPUT_OUTPUT")
+          echo "report=$INPUT_OUTPUT" >> "$GITHUB_OUTPUT"
+        fi
+        if [ -n "$INPUT_ARGS" ]; then
+          read -r -a extra <<< "$INPUT_ARGS"
+          cmd+=("${extra[@]}")
+        fi
+        echo "+ ${cmd[*]}"
+        "${cmd[@]}"
+        code=$?
+        echo "exit-code=$code" >> "$GITHUB_OUTPUT"
+        exit "$code"
