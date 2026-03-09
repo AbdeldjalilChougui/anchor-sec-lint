@@ -1,0 +1,13 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it using the metadata from this file."
+type: software
+title: "anchor-sec-lint"
+abstract: "Heuristic static security checks for Anchor (Solana) programs, with SARIF output"
+authors:
+  - family-names: Chougui
+    given-names: Abdeldjalil
+version: 0.1.0
+license: MIT
+repository-code: "https://github.com/AbdeldjalilChougui/anchor-sec-lint"
+url: "https://github.com/AbdeldjalilChougui/anchor-sec-lint"
+keywords: [solana, anchor, security, lint, sarif]
